@@ -2,10 +2,10 @@
 # -*- coding: utf-8 -*-
 import os,sys,logging,importlib,site
 
-from PyQt6.QtCore import QUrl
 from PyQt6.QtWidgets import QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
+from PyQt6.QtCore import QObject
 
 default_webapp_html = """
 <!DOCTYPE html>
@@ -37,18 +37,42 @@ default_webapp_html = """
 </html>
 """.replace("MODULE_PATH", os.path.join(site.getusersitepackages(), "webappviewer_apps")).replace("APPLICATIONS_PATH", os.path.join(os.path.expanduser("~"), ".local", "share", "applications"))
 
+class WindowManager(QObject):
+    def __init__(self):
+        super().__init__()
+        self.windows = []  # ウィンドウ参照を保持
+
+    def add_window(self, window):
+        self.windows.append(window)
+        window.destroyed.connect(lambda: self.remove_window(window))
+
+    def remove_window(self, window):
+        if window in self.windows:
+            self.windows.remove(window)
+
 class ConsoleLogPrintableWebEnginePage(QWebEnginePage):
     def __init__(self, profile, parent=None):
         super().__init__(profile, parent)
+        self.window_manager = WindowManager()
         self.profile = profile
         self.setParent(parent)
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
         print(f"JS Console [{level}]: {message} (line: {lineNumber}, source: {sourceID})")
+    def createWindow(self, type):
+        new_window = QMainWindow()
+        new_window.resize(800, 600)
+        new_browser = QWebEngineView(new_window)
+        new_page = ConsoleLogPrintableWebEnginePage(self.profile, new_browser)
+        new_browser.setPage(new_page)
+        new_window.setCentralWidget(new_browser)
+        new_window.show()
+        self.window_manager.add_window(new_window)
+        return new_page
 
 class WebAppViewer(QMainWindow):
     def __init__(self, app_name, app_module):
         super().__init__()
-        self.setMaximumSize(1600, 1200)
+        self.setMaximumSize(1920, 1200)
         from PyQt6.QtCore import Qt
         self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
 

@@ -1,6 +1,11 @@
 #!/usr/bin/python3
 # -*- coding: utf-8 -*-
-import os,sys,logging,importlib,site
+import os,sys,logging,importlib,site,re
+from io import BytesIO
+
+import requests
+from bs4 import BeautifulSoup
+from PIL import Image
 
 from PyQt6.QtWidgets import QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -36,6 +41,48 @@ default_webapp_html = """
 </body>
 </html>
 """.replace("MODULE_PATH", os.path.join(site.getusersitepackages(), "webappviewer_apps")).replace("APPLICATIONS_PATH", os.path.join(os.path.expanduser("~"), ".local", "share", "applications"))
+
+def save_icon_file(url, save_as):
+    response = requests.get(url)
+    soup = BeautifulSoup(response.text, 'html.parser')
+    
+    icons = []
+    # <link rel="icon"> や <link rel="apple-touch-icon"> を取得
+    for link in soup.find_all('link', rel=['icon', 'apple-touch-icon', 'shortcut icon']):
+        href = link.get('href')
+        sizes = link.get('sizes')
+        
+        if not href:
+            continue
+            
+        # 絶対URLに変換
+        if not href.startswith('http'):
+            href = requests.compat.urljoin(url, href)
+            
+        # サイズ情報を取得（例: 192x192）
+        size_value = 0
+        if sizes:
+            match = re.match(r'(\d+)x(\d+)', sizes)
+            if match:
+                size_value = int(match.group(1)) * int(match.group(2))
+                
+        icons.append((href, size_value))
+    
+    if not icons:
+        logging.error("No icons found on the page")
+        return False
+        
+    # 解像度が最大のアイコンを選択（サイズ情報がない場合は面積0として扱う）
+    icon_url = max(icons, key=lambda x: x[1])[0]
+
+    
+    # アイコンをダウンロード
+    icon_response = requests.get(icon_url)
+    img = Image.open(BytesIO(icon_response.content))
+    
+    # PNGに変換して保存
+    img.save(save_as, 'PNG')
+    return True
 
 class WindowManager(QObject):
     def __init__(self):
@@ -142,12 +189,40 @@ class WebAppViewer(QMainWindow):
             logging.info(f"スクリーンショットを保存しました: {file_path}")
         else:
             logging.info("スクリーンショットの保存がキャンセルされました。")
+
+def install(app_name):
+    executable = os.path.abspath(sys.argv[0])
+    name = app_name
+    url = None
+    icon = "webappviewer-" + app_name
+    categories = "Utility;"
     
+    if hasattr(app_module, "desktop"):
+        desktop = app_module.desktop
+        if "name" in desktop:
+            name = desktop["name"]
+        if "url" in desktop:
+            url = desktop["url"]
+        if "categories" in desktop:
+            categories = desktop["categories"]
+
+    with open(os.path.join(os.path.expanduser("~"), ".local", "share", "applications", f"webappviewer-{app_name}.desktop"), "w") as f:
+        f.write(f"[Desktop Entry]\nName={name}\nType=Application\nExec={executable} {app_name}\n")
+        f.write(f"Icon={icon}\nCategories={categories}\n")
+    
+    icon_path = os.path.join(os.path.expanduser("~"), ".local", "share", "icons", icon + ".png")
+    if url:
+        if save_icon_file(url, icon_path):
+            logging.info(f"Icon saved to {icon_path}")
+        else:
+            logging.error("Failed to save icon.")
+    logging.info(f"Desktop entry created at ~/.local/share/applications/webappviewer-{app_name}.desktop")   
+
 if __name__ == "__main__":
     import argparse
     parser = argparse.ArgumentParser(description="Webアプリケーションビューア")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument("--print-desktop-file", action="store_true", help="Print .desktop file")
+    parser.add_argument("--install", action="store_true", help="Install .desktop file and icon")
     parser.add_argument("app_name", nargs='?', default="default", help="Application name")
     args = parser.parse_args()
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
@@ -164,26 +239,16 @@ if __name__ == "__main__":
     else:
         app_module = importlib.import_module("webappviewer_apps." + args.app_name)
 
-    import sys
-
-    if args.print_desktop_file:
-        executable = os.path.abspath(sys.argv[0])
-        name = args.app_name
-        icon = "webappviewer-" + args.app_name
-        categories = "Utility;"
-        if hasattr(app_module, "desktop"):
-            desktop = app_module.desktop
-            if "name" in desktop:
-                name = desktop["name"]
-            if "categories" in desktop:
-                categories = desktop["categories"]
-
-        print("# Place this file in ~/.local/share/applications/ to create a desktop entry")
-        print(f"# Icon should be placed as ~/.local/share/icons/{icon}.(png|svg)")
-        print(f"[Desktop Entry]\nName={name}\nType=Application\nExec={executable} {args.app_name}")
-        print(f"Icon={icon}\nCategories={categories}")
+    if args.install:
+        try:
+            install(args.app_name)
+        except Exception as e:
+            logging.error(f"Failed to install: {e}")
+            sys.exit(1)
+        logging.info("Installation completed successfully.")
         sys.exit(0)
 
+    # else
     from PyQt6.QtWidgets import QApplication
     app = QApplication(sys.argv)
     app.setApplicationName("webappviewer." + args.app_name)

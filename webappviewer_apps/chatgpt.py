@@ -3,6 +3,7 @@ from PyQt6.QtCore import QUrl
 desktop = {
     "name": "ChatGPT",
     "url": "https://chatgpt.com/",
+    "icon": "https://cdn.oaistatic.com/assets/favicon-180x180-od45eci6.webp",
     "categories": "Network;Utility;"
 }
 

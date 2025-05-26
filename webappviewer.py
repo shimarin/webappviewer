@@ -42,6 +42,20 @@ default_webapp_html = """
 </html>
 """.replace("MODULE_PATH", os.path.join(site.getusersitepackages(), "webappviewer_apps")).replace("APPLICATIONS_PATH", os.path.join(os.path.expanduser("~"), ".local", "share", "applications"))
 
+def convert_to_png(image_binary):
+    """
+    Convert image binary data to PNG format.
+    """
+    try:
+        img = Image.open(BytesIO(image_binary))
+        img = img.convert("RGBA")  # Ensure it's in RGBA format
+        output = BytesIO()
+        img.save(output, format='PNG')
+        return output.getvalue()
+    except Exception as e:
+        logging.error(f"Failed to convert image to PNG: {e}")
+        return None
+
 def save_icon_file(url, save_as):
     response = requests.get(url)
     soup = BeautifulSoup(response.text, 'html.parser')
@@ -51,12 +65,13 @@ def save_icon_file(url, save_as):
     for link in soup.find_all('link', rel=['icon', 'apple-touch-icon', 'shortcut icon']):
         href = link.get('href')
         sizes = link.get('sizes')
+        logging.debug(f"Found icon link: {href}, sizes: {sizes}")
         
         if not href:
             continue
             
         # 絶対URLに変換
-        if not href.startswith('http'):
+        if not href.startswith('https://'):
             href = requests.compat.urljoin(url, href)
             
         # サイズ情報を取得（例: 192x192）
@@ -78,10 +93,15 @@ def save_icon_file(url, save_as):
     
     # アイコンをダウンロード
     icon_response = requests.get(icon_url)
-    img = Image.open(BytesIO(icon_response.content))
+    img = convert_to_png(icon_response.content)
+    if img is None:
+        logging.error(f"Failed to convert icon from {icon_url} to PNG.")
+        return False
+    #else
+    with open(save_as, 'wb') as f:
+        f.write(img)
+    logging.info(f"Icon saved to {save_as}")
     
-    # PNGに変換して保存
-    img.save(save_as, 'PNG')
     return True
 
 class WindowManager(QObject):
@@ -193,7 +213,8 @@ class WebAppViewer(QMainWindow):
 def install(app_name):
     executable = os.path.abspath(sys.argv[0])
     name = app_name
-    url = None
+    icon_url = None
+    page_url = None
     icon = "webappviewer-" + app_name
     categories = "Utility;"
     
@@ -202,7 +223,9 @@ def install(app_name):
         if "name" in desktop:
             name = desktop["name"]
         if "url" in desktop:
-            url = desktop["url"]
+            page_url = desktop["url"]
+        if "icon" in desktop:
+            icon_url = desktop["icon"]
         if "categories" in desktop:
             categories = desktop["categories"]
 
@@ -211,8 +234,16 @@ def install(app_name):
         f.write(f"Icon={icon}\nCategories={categories}\n")
     
     icon_path = os.path.join(os.path.expanduser("~"), ".local", "share", "icons", icon + ".png")
-    if url:
-        if save_icon_file(url, icon_path):
+    if icon_url is not None:
+        req = requests.get(icon_url)
+        if req.status_code == 200:
+            with open(icon_path, "wb") as icon_file:
+                icon_file.write(convert_to_png(req.content))
+            logging.info(f"Icon saved to {icon_path}")
+        else:
+            logging.error(f"Failed to download icon from {icon_url}, status code: {req.status_code}")
+    elif page_url:
+        if save_icon_file(page_url, icon_path):
             logging.info(f"Icon saved to {icon_path}")
         else:
             logging.error("Failed to save icon.")

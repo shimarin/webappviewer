@@ -9,8 +9,9 @@ from PIL import Image
 
 from PyQt6.QtWidgets import QMainWindow
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage
+from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineNewWindowRequest
 from PyQt6.QtCore import QObject
+from PyQt6.QtGui import QDesktopServices
 
 default_webapp_html = """
 <!DOCTYPE html>
@@ -37,6 +38,7 @@ default_webapp_html = """
         <h1>Web App Viewer</h1>
         <p>Place your web application module in:<pre>MODULE_PATH</pre></p>
         <p>Then place .desktop file in:<pre>APPLICATIONS_PATH</pre></p>
+        <p><a href="https://www.google.com" target="_blank">Google</a>
     </div>
 </body>
 </html>
@@ -123,9 +125,21 @@ class ConsoleLogPrintableWebEnginePage(QWebEnginePage):
         self.window_manager = WindowManager()
         self.profile = profile
         self.setParent(parent)
+        #self.pending_url = None
+        self.newWindowRequested.connect(self.handle_new_window)
+    
+    def handle_new_window(self, request):
+        logging.info(f"New window requested for URL: {request.requestedUrl()} in {request.destination()}")
+        if request.destination() != QWebEngineNewWindowRequest.DestinationType.InNewDialog:
+            QDesktopServices.openUrl(request.requestedUrl())
+
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
         print(f"JS Console [{level}]: {message} (line: {lineNumber}, source: {sourceID})")
+
     def createWindow(self, type):
+        if type != QWebEnginePage.WebWindowType.WebDialog:
+            return super().createWindow(type)
+        #else
         new_window = QMainWindow()
         new_window.resize(800, 600)
         new_browser = QWebEngineView(new_window)

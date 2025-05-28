@@ -8,6 +8,7 @@ desktop = {
 }
 
 def open(window, browser):
+    window.menuBar().setVisible(False)
     browser.load(QUrl(desktop["url"]))
     window.resize(1000, 800)
     window.setWindowTitle(desktop["name"])

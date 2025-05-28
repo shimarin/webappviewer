@@ -101,7 +101,6 @@ def save_icon_file(url, save_as):
     #else
     with open(save_as, 'wb') as f:
         f.write(img)
-    logging.info(f"Icon saved to {save_as}")
     
     return True
 
@@ -246,7 +245,7 @@ class WebAppViewer(QMainWindow):
             else:
                 self.browser.findText("")
 
-def install(app_name):
+def enable(app_name, app_module):
     executable = os.path.abspath(sys.argv[0])
     name = app_name
     icon_url = None
@@ -266,7 +265,8 @@ def install(app_name):
             categories = desktop["categories"]
 
     with open(os.path.join(os.path.expanduser("~"), ".local", "share", "applications", f"webappviewer-{app_name}.desktop"), "w") as f:
-        f.write(f"[Desktop Entry]\nName={name}\nType=Application\nExec={executable} {app_name}\n")
+        f.write(f"[Desktop Entry]\nName={name}\nType=Application\n")
+        f.write(f"Exec=python -m webappviewer {app_name}\n")
         f.write(f"Icon={icon}\nCategories={categories}\n")
     
     icon_path = os.path.join(os.path.expanduser("~"), ".local", "share", "icons", icon + ".png")
@@ -285,13 +285,34 @@ def install(app_name):
             logging.error("Failed to save icon.")
     logging.info(f"Desktop entry created at ~/.local/share/applications/webappviewer-{app_name}.desktop")   
 
-if __name__ == "__main__":
+def disable(app_name):
+    done = False
+    desktop_file = os.path.join(os.path.expanduser("~"), ".local", "share", "applications", f"webappviewer-{app_name}.desktop")
+    icon_path = os.path.join(os.path.expanduser("~"), ".local", "share", "icons", "webappviewer-" + app_name + ".png")
+    if os.path.exists(desktop_file):
+        os.remove(desktop_file)
+        done = True
+        logging.info(f"Desktop entry removed: {desktop_file}")
+    else:
+        logging.warning(f"Desktop entry not found: {desktop_file}")
+    if os.path.exists(icon_path):
+        os.remove(icon_path)
+        logging.info(f"Icon removed: {icon_path}")
+    else:
+        logging.warning(f"Icon not found: {icon_path}")
+    return done
+
+def main():
     import argparse
     parser = argparse.ArgumentParser(description="Webアプリケーションビューア")
     parser.add_argument("-v", "--verbose", action="store_true", help="Enable verbose logging")
-    parser.add_argument("--install", action="store_true", help="Install .desktop file and icon")
+    parser.add_argument("--enable", action="store_true", help="Install .desktop file and icon")
+    parser.add_argument("--disable", action="store_true", help="Uninstall .desktop file and icon")
     parser.add_argument("app_name", nargs='?', default="default", help="Application name")
     args = parser.parse_args()
+    if args.enable and args.disable:
+        logging.error("Cannot specify both --enable and --disable options.")
+        sys.exit(1)
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO)
 
     app_module = None
@@ -306,14 +327,17 @@ if __name__ == "__main__":
     else:
         app_module = importlib.import_module("webappviewer_apps." + args.app_name)
 
-    if args.install:
+    if args.enable:
         try:
-            install(args.app_name)
+            enable(args.app_name, app_module)
         except Exception as e:
-            logging.error(f"Failed to install: {e}")
+            logging.error(f"Failed to enable: {e}")
             sys.exit(1)
-        logging.info("Installation completed successfully.")
+        logging.info(f"Web Application '{args.app_name}' has been enabled.")
         sys.exit(0)
+    elif args.disable:
+        if disable(args.app_name):
+            logging.info(f"Web Application '{args.app_name}' has been disabled.")
 
     # else
     from PyQt6.QtWidgets import QApplication
@@ -323,3 +347,6 @@ if __name__ == "__main__":
 
     window = WebAppViewer(args.app_name, app_module)
     sys.exit(app.exec())
+
+if __name__ == "__main__":
+    main()

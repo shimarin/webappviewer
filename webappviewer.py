@@ -201,6 +201,7 @@ class WebAppViewer(QMainWindow):
         operation_menu.addAction("スクリーンショット(クリップボード)", self.take_screenshot_clipboard)
         operation_menu.addAction("スクリーンショット(ファイル)", self.take_screenshot_file)
         operation_menu.addAction("閉じる", self.close)
+        menubar.setVisible(False)  # 初期状態では非表示
 
         self.app_module = app_module
         app_module.open(self, self.browser)
@@ -236,7 +237,8 @@ class WebAppViewer(QMainWindow):
         else:
             logging.info("スクリーンショットの保存がキャンセルされました。")
     
-    # Ctrl+Fで検索バーを表示
+    # Ctrl+Fで検索バーを表示/非表示
+    # Ctrl+Lでメニューバーを表示/非表示
     def keyPressEvent(self, event):
         if event.key() == Qt.Key.Key_F and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
             self.search_bar.setVisible(not self.search_bar.isVisible())
@@ -244,6 +246,8 @@ class WebAppViewer(QMainWindow):
                 self.search_bar.setFocus()
             else:
                 self.browser.findText("")
+        elif event.key() == Qt.Key.Key_L and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.menuBar().setVisible(not self.menuBar().isVisible())
 
 def enable(app_name, app_module):
     executable = os.path.abspath(sys.argv[0])

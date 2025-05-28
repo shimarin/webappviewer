@@ -338,6 +338,7 @@ def main():
     elif args.disable:
         if disable(args.app_name):
             logging.info(f"Web Application '{args.app_name}' has been disabled.")
+        sys.exit(0)
 
     # else
     from PyQt6.QtWidgets import QApplication

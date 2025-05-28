@@ -7,10 +7,10 @@ import requests
 from bs4 import BeautifulSoup
 from PIL import Image
 
-from PyQt6.QtWidgets import QMainWindow
+from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QLineEdit, QWidget
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineProfile, QWebEnginePage, QWebEngineNewWindowRequest
-from PyQt6.QtCore import QObject
+from PyQt6.QtCore import Qt, QObject
 from PyQt6.QtGui import QDesktopServices
 
 default_webapp_html = """
@@ -92,7 +92,6 @@ def save_icon_file(url, save_as):
     # 解像度が最大のアイコンを選択（サイズ情報がない場合は面積0として扱う）
     icon_url = max(icons, key=lambda x: x[1])[0]
 
-    
     # アイコンをダウンロード
     icon_response = requests.get(icon_url)
     img = convert_to_png(icon_response.content)
@@ -180,7 +179,21 @@ class WebAppViewer(QMainWindow):
         self.browser.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
         self.browser.settings().setAttribute(QWebEngineSettings.WebAttribute.LocalContentCanAccessRemoteUrls, True)
         self.browser.settings().setAttribute(QWebEngineSettings.WebAttribute.JavascriptCanAccessClipboard, True)
-        self.setCentralWidget(self.browser)
+
+        central_widget = QWidget()
+        self.vbox = QVBoxLayout(central_widget)
+        self.setCentralWidget(central_widget)
+
+        # VBox content 1 : browser
+        # VBox content 2 : content search bar
+        self.search_bar = QLineEdit()
+        self.search_bar.setPlaceholderText("コンテンツを検索...")
+        self.search_bar.returnPressed.connect(lambda: self.browser.findText(self.search_bar.text()))
+        self.vbox.addWidget(self.browser)
+        self.vbox.addWidget(self.search_bar)
+        self.vbox.setContentsMargins(0, 0, 0, 0)
+        self.vbox.setSpacing(0)
+        self.search_bar.setVisible(False)  # 初期状態では非表示
 
         # setup menu
         menubar = self.menuBar()
@@ -223,6 +236,15 @@ class WebAppViewer(QMainWindow):
             logging.info(f"スクリーンショットを保存しました: {file_path}")
         else:
             logging.info("スクリーンショットの保存がキャンセルされました。")
+    
+    # Ctrl+Fで検索バーを表示
+    def keyPressEvent(self, event):
+        if event.key() == Qt.Key.Key_F and event.modifiers() & Qt.KeyboardModifier.ControlModifier:
+            self.search_bar.setVisible(not self.search_bar.isVisible())
+            if self.search_bar.isVisible():
+                self.search_bar.setFocus()
+            else:
+                self.browser.findText("")
 
 def install(app_name):
     executable = os.path.abspath(sys.argv[0])

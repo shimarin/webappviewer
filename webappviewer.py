@@ -99,6 +99,7 @@ def save_icon_file(url, save_as):
         logging.error(f"Failed to convert icon from {icon_url} to PNG.")
         return False
     #else
+    os.makedirs(os.path.dirname(save_as), exist_ok=True)
     with open(save_as, 'wb') as f:
         f.write(img)
     

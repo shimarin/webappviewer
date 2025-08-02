@@ -9,6 +9,7 @@ all:
 
 install:
 	@echo "Installing webappviewer to $(PYTHON_USER_SITE)"
+	mkdir -p $(PYTHON_USER_SITE)
 	cp webappviewer.py $(PYTHON_USER_SITE)/webappviewer.py
 	mkdir -p $(APPS_DIR)
 	cp -r webappviewer_apps/*.py $(APPS_DIR)

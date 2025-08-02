@@ -6,6 +6,7 @@ from io import BytesIO
 import requests
 from bs4 import BeautifulSoup
 from PIL import Image
+from cairosvg import svg2png
 
 from PyQt6.QtWidgets import QMainWindow, QVBoxLayout, QLineEdit, QWidget
 from PyQt6.QtWebEngineWidgets import QWebEngineView
@@ -49,6 +50,12 @@ def convert_to_png(image_binary):
     Convert image binary data to PNG format.
     """
     try:
+        #print(image_binary[:100])  # Debug: print first 100 bytes of the image binary
+        if image_binary.startswith(b'<?xml') or image_binary.startswith(b'<svg'):  # Check if it's SVG
+            output = BytesIO()
+            svg2png(bytestring=image_binary, write_to=output)
+            return output.getvalue()
+        # else assume it's a raster image (JPEG, PNG, etc.)
         img = Image.open(BytesIO(image_binary))
         img = img.convert("RGBA")  # Ensure it's in RGBA format
         output = BytesIO()
@@ -278,6 +285,7 @@ def enable(app_name, app_module):
     if icon_url is not None:
         req = requests.get(icon_url)
         if req.status_code == 200:
+            os.makedirs(os.path.dirname(icon_path), exist_ok=True)
             with open(icon_path, "wb") as icon_file:
                 icon_file.write(convert_to_png(req.content))
             logging.info(f"Icon saved to {icon_path}")

@@ -133,6 +133,7 @@ class ConsoleLogPrintableWebEnginePage(QWebEnginePage):
         self.setParent(parent)
         #self.pending_url = None
         self.newWindowRequested.connect(self.handle_new_window)
+        self.featurePermissionRequested.connect(self.on_perm)
     
     def handle_new_window(self, request):
         logging.info(f"New window requested for URL: {request.requestedUrl()} in {request.destination()}")
@@ -141,6 +142,16 @@ class ConsoleLogPrintableWebEnginePage(QWebEnginePage):
 
     def javaScriptConsoleMessage(self, level, message, lineNumber, sourceID):
         print(f"JS Console [{level}]: {message} (line: {lineNumber}, source: {sourceID})")
+
+    def on_perm(self, origin, feature):
+        if feature in (QWebEnginePage.Feature.MediaAudioCapture,
+                       QWebEnginePage.Feature.MediaVideoCapture,
+                       QWebEnginePage.Feature.MediaAudioVideoCapture):
+            self.setFeaturePermission(origin, feature,
+                QWebEnginePage.PermissionPolicy.PermissionGrantedByUser)
+        else:
+            self.setFeaturePermission(origin, feature,
+                QWebEnginePage.PermissionPolicy.PermissionDeniedByUser)
 
     def createWindow(self, type):
         if type != QWebEnginePage.WebWindowType.WebDialog:
